@@ -1,4 +1,5 @@
-#define F_CPU 16000000UL
+#define F_CPU 1000000UL
+//#define F_CPU 16000000UL
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -13,6 +14,8 @@
 // define some macros
 #define BAUD 9600                                   // define baud
 #define UBRR ((F_CPU)/(BAUD*16UL)-1)            // set baud rate value for UBRR
+
+#define VOLTREF 3.3
 
 // pin defines
 #define PORT_LED PORTD
@@ -90,10 +93,12 @@ void adc_init()
     // AREF = AVcc
     ADMUX = (1<<REFS0);
  
-    // ADC Enable and prescaler of 128
+    // ADC Enable and prescaler
     // channel ADC0
     // 16000000/128 = 125000
-    ADCSRA = (1<<ADEN)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0);
+    // 1e6/8=125k
+    //ADCSRA = (1<<ADEN)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0);
+    ADCSRA = (1<<ADEN)|(1<<ADPS1)|(1<<ADPS0);
 }
 
 uint16_t adc_read(uint8_t ch)
@@ -118,13 +123,12 @@ uint16_t adc_read(uint8_t ch)
 }
 
 ISR(TIMER0_OVF_vect) {
-    PORT_PWR = 0;
+    PORT_PWR &= 0;
         //toggle active display
     if (i_active_display == LED2 )
         i_active_display = LED0;
     else
         i_active_display++;
-    PORT_PWR = (1 << i_active_display);
     
     switch (i_active_display) {
         case LED0:
@@ -138,6 +142,7 @@ ISR(TIMER0_OVF_vect) {
             write_digit((int)(display_value * 10) % 10, false);
             break;
     }
+    PORT_PWR = (1 << i_active_display);
 }
 
 int main(){
@@ -152,15 +157,11 @@ int main(){
     DDR_PWR = 0b00011100;
 
     TIMSK0 |= (1 << TOIE0);  // timer 0 overflow interupt
-    //TCCR1B |= (1 << WGM12);  // config for CTC mode
-    //TIMSK1 |= (1 << OCIE1A);  // CTC interupt
-    //OCR1A |= 31250;             // prescaler
     
     sei();
     
-    //TCCR0B |= (1 << CS01); //timer 0 at clk/8
-    //TCCR1B |= (1 << CS11) | (1 << CS10); //timer 1 at clk/64
-    TCCR0B |= (1 << CS01) | (1 << CS00);
+    TCCR0B |= (1 << CS01); //timer 0 at clk/8
+    //TCCR0B |= (1 << CS01) | (1 << CS00); //timer at clock/64
     //TCCR1B |= (1 << CS12);
 
     adc_init();
@@ -168,7 +169,7 @@ int main(){
 
     while(1){
         adcVal = adc_read(0);
-        volt = adcVal * (5.00 / 1023);
+        volt = adcVal * (3.3 / 1023);
         temp = (volt - 0.5) * 100;
         write_number(temp);
         /*
